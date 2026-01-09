@@ -5,7 +5,7 @@
 **A small, explicit, embeddable scripting language**  
 with C-style syntax, implemented entirely in **Luau**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Luau](https://img.shields.io/badge/built%20with-Luau-2C3E50.svg)](https://luau-lang.org/)
 [![Release](https://img.shields.io/github/v/release/U-235Consumer/TuffSeal?include_prereleases)](
 https://github.com/U-235Consumer/TuffSeal/releases
