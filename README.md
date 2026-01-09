@@ -7,7 +7,10 @@ with C-style syntax, implemented entirely in **Luau**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Luau](https://img.shields.io/badge/built%20with-Luau-2C3E50.svg)](https://luau-lang.org/)
-[![Release](https://img.shields.io/github/v/release/U-235Consumer/TuffSeal)](https://github.com/U-235Consumer/TuffSeal/releases)
+[![Release](https://img.shields.io/github/v/release/U-235Consumer/TuffSeal?include_prereleases)](
+https://github.com/U-235Consumer/TuffSeal/releases
+)
+
 
 </div>
 
