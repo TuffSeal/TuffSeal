@@ -18,18 +18,25 @@ type ASTNode = {
     elseBranch: {any}?;
     elements: { ASTNode }?;
     entries: { key: string, value: any }?;
+    callSelf: boolean?;
 }
 
 local interpreter = {};
 interpreter.__index = interpreter;
 
-local TUFFSEAL_DEFAULT_ENVIRONMENT = {};
+local fs = require("@lune/fs");
+local String = require("./string");
+
+local BREAKSIGNAL = { kind = "Break" };
+
+local TUFFSEAL_DEFAULT_ENVIRONMENT = {
+    ['getenv'] = function (self)
+        return self or {};
+    end
+};
 
 -- // built-in functions and stuff are in the const environment to prevent hooking
 local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
-    ['true'] = true,
-    ['false'] = false,
-    ['none'] = nil,
     ['print'] = print,
     ['warn'] = warn,
     ['error'] = error,
@@ -37,7 +44,6 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         return #obj;
     end,
     ['ipairs'] = ipairs,
-    ['pairs'] = pairs,
     ['push'] = function (array: { any }, value: any)
         local max = -1;
         for k in pairs(array) do
@@ -51,9 +57,7 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         return table.remove(array);
     end,
     ['get'] = function (array: { any }, index: number)
-        local idx = table.find(array, index);
-        if (not idx) then return nil end;
-        return array[idx];
+        return array[index + 1];
     end,
     ['remove'] = function (array: { any }, index: number)
         array[index] = nil;
@@ -73,11 +77,105 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
     ['str'] = tostring,
     ['int'] = tonumber,
     ['hasattr'] = function (dict: { [string]: any }, key: string)
-        if (dict[key] ~= nil) then return true else return else end;
+        if (dict[key] ~= nil) then return true else return false end;
     end,
     ['getattr'] = function (dict: { [string]: any }, key: string)
-        assert(TUFFSEAL_DEFAULT_ENVIRONMENT['hasattr'](dict, key), `This dictionary does not contain key: {key}!`, 2);
+        return dict[key];
     end,
+    ['setattr'] = function (dict: { [string]: any }, key: string, value: any)
+        dict[key] = value;
+    end,
+    ['loadmodule'] = function (self: { [string]: any? }, modulePath: string, ...)
+        --[[
+        let module = loadmodule("path.tfs", "loadargs after the filepath!")!;
+
+        INSIDE MODULE: getloadargs() to get load args
+
+        -----------------------------------------------------------------------
+
+        // module structure
+
+        fn add(a, b)
+        {
+            a + b;
+        }
+
+        fn subtract(a, b)
+        {
+            a - b;
+        }
+
+        fn print_load_args()
+        {
+            print(getloadargs());
+        }
+
+        let module = { // this variable can be named whatever.
+            add: add,
+            sub: subtract
+        };
+
+        module; // automatically returned
+
+        ----------------------------------------------------------------------
+        ALTERNATIVELY:
+
+        fn add(a, b)
+        {
+            a + b;
+        }
+
+        add; // return the function direclty
+
+        -- // use for this would be
+
+        local add_fn = loadmodule("path.tfs")
+        ]]
+
+        if (String.startsWith(modulePath, "@std")) then
+            local remainingPath = string.sub(modulePath, 6, #modulePath);
+            return require("./stdlib"):getmodule(remainingPath);
+        end
+
+        local loadArgs = {...};
+        
+        assert(type(self) == 'table', `loadmodule error: expected 'self' to be dictionary, but recieved: {type(self)}. Did you run loadmodule with an exclamation mark? (CORRECT: loadmodule('path.tfs', 'args')!)`);
+        assert(modulePath, `loadmodule error: expected arg 'modulePath', but recieved: null`);
+        assert(type(modulePath) == 'string', `loadmodule error: expected 'string' for arg 'modulePath', recieved: {type(modulePath)}`);
+        assert(fs.isFile(modulePath), `loadmodule error: failed to find module for: {modulePath}`);
+        
+        local module_content = fs.readFile(modulePath);
+        
+        local Lexer = require("./lexer");
+        local Parser = require("./parser");
+
+        local tokens = Lexer.new(module_content):scanTokens();
+        local parser = Parser.new(tokens);
+
+        local vInterpreter = setmetatable({},interpreter);
+        vInterpreter.env = TUFFSEAL_DEFAULT_ENVIRONMENT;
+        vInterpreter.const_env = self;
+
+        function vInterpreter.env.getloadargs(): { any }
+            return loadArgs; -- // returns array w load args
+        end
+
+        -- // run
+
+        local RETURN;
+
+        while (not parser:isAtEnd()) do
+            local statement = parser:parseStatement();
+            if (statement) then
+                RETURN = vInterpreter:evaluate(statement);
+            end
+        end
+
+        return RETURN;
+    end,
+    ['cloneobject'] = function (obj: any)
+        return obj;
+    end
 };
 
 function interpreter.new()
@@ -93,7 +191,9 @@ function interpreter.new()
     return self;
 end
 
-function interpreter:evaluate(node: ASTNode): number
+function interpreter:evaluate(node: ASTNode): any
+    if (node == nil) then return nil end;
+    
     local kind_operations = {
         Literal = function ()
             return node.value;
@@ -160,26 +260,57 @@ function interpreter:evaluate(node: ASTNode): number
                 self.env[node.name] = value;
             end
         end,
-        Call = function ()
-            --[[
-            callee("a", "b", 1, 2); etc
-            ]]
-            local callee_function = self.env[node.callee];
-            
-            if (not callee_function or typeof(callee_function) ~= "function") then
-                if (self.const_env[node.callee] and typeof(self.const_env[node.callee]) == 'function') then
-                    callee_function = self.const_env[node.callee];
-                else
-                    error(`TypeSeal interpreter error: Undefined function: {node.callee}`, 2);
-                end;
+        Assign = function ()
+            if (self.const_env[node.name] ~= nil) then
+                error(`TuffSeal interpreter error: Cannot reassign constant {node.name}`, 2);
             end
 
-            local args: { any } = {};
-            
-            for idx, argnode in ipairs(node.arguments) do
+            if (self.env[node.name] == nil) then
+                error(`TuffSeal interpreter error: Variable {node.name} is not defined`, 2);
+            end
+
+            local value = self:evaluate(node.value);
+            self.env[node.name] = value;
+            return value;
+        end,
+        Call = function ()
+            local callee_expr = self:evaluate(node.callee);
+
+            local callee_function;
+            local selfObj = nil;
+
+            if (node.callSelf and node.callee.kind == "Property") then
+                selfObj = self:evaluate(node.callee.object);
+                callee_function = selfObj[node.callee.name];
+            elseif (node.callee.kind == "Variable") then
+                callee_function = self:evaluate(node.callee);
+            else
+                callee_function = callee_expr;
+            end
+
+            if (typeof(callee_function) ~= "function") then
+                error(`TuffSeal interpreter error: Undefined function: {tostring(callee_function)}`, 2);
+            end
+
+            if (node.callSelf and typeof(callee_function) == "function") then
+                for k, v in pairs(TUFFSEAL_DEFAULT_CONST_ENVIRONMENT) do
+                    if (v == callee_function) then
+                        selfObj = self.const_env;
+                        break;
+                    end
+                end
+            end
+
+            local args = {};
+            for _, argnode in ipairs(node.arguments) do
                 table.insert(args, self:evaluate(argnode));
             end
-            return callee_function(table.unpack(args));
+
+            if (selfObj) then
+                return callee_function(selfObj, table.unpack(args)); 
+            else
+                return callee_function(table.unpack(args));
+            end
         end,
         Function = function ()
             --[[
@@ -262,9 +393,15 @@ function interpreter:evaluate(node: ASTNode): number
             ]]
             while (self:evaluate(node.condition)) do
                 for _, statement in ipairs(node.body) do
-                    self:evaluate(statement);
+                    local result = self:evaluate(statement);
+                    if (result == BREAKSIGNAL) then
+                        return nil;
+                    end
                 end
             end
+        end,
+        Break = function ()
+            return BREAKSIGNAL;
         end,
         ForNumeric = function ()
             --[[
@@ -277,9 +414,10 @@ function interpreter:evaluate(node: ASTNode): number
             local step = node.step and self:evaluate(node.step) or 1;
 
             for i = start, finish, step do
-                self.env[node.iterator] = i;
+                self.env[node.variable] = i;
                 for _, statement in ipairs(node.body) do
-                    self:evaluate(statement);
+                    local res = self:evaluate(statement);
+                    if (res == BREAKSIGNAL) then return nil end;
                 end
             end
         end,
@@ -316,7 +454,8 @@ function interpreter:evaluate(node: ASTNode): number
                 local LoopInterpreter = setmetatable({env = LoopEnv, const_env = self.const_env}, interpreter);
 
                 for _, stmt in ipairs(node.body) do
-                    LoopInterpreter:evaluate(stmt);
+                    local res = LoopInterpreter:evaluate(stmt);
+                    if (res == BREAKSIGNAL) then return nil end;
                 end
 
                 var = k;
@@ -332,21 +471,23 @@ function interpreter:evaluate(node: ASTNode): number
             return array;
         end,
         Dictionary = function ()
+            if (not node or not node.entries) then
+                return {};
+            end
+
             local dict = {};
 
             for idx, entry in ipairs(node.entries) do
-                dict[entry.key] = self:evaluate(entry.value);
+                if (entry and entry.key) then
+                    dict[entry.key] = self:evaluate(entry.value);
+                end
             end
             
             return dict;
         end,
-        Member = function ()
+        Property = function ()
             local obj = self:evaluate(node.object);
-            local value = obj[node.property];
-
-            if (value == nil) then
-                error(`TuffSeal interpreter error: Undefiner property {node.property}`, 2);
-            end
+            local value = obj[node.name];
 
             return value;
         end,

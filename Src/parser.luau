@@ -25,6 +25,7 @@ type ASTNode = {
     elseBranch: {any}?;
     elements: { ASTNode }?;
     entries: { key: string, value: any }?;
+    callSelf: boolean?;
 }
 
 local Parser = {};
@@ -65,6 +66,12 @@ function Parser:parsePrimary(): ASTNode
         expr = { kind = "Literal"; value = token.literal; };
     elseif (token.type == "STRING") then
         expr = { kind = "Literal"; value = token.literal; };
+    elseif (token.type == "TRUE") then
+        expr = { kind = "Literal"; value = true; };
+    elseif (token.type == "FALSE") then
+        expr = { kind = "Literal"; value = false; };
+    elseif (token.type == "NULL") then
+        expr = { kind = "Literal"; value = nil; };
     elseif (token.type == "(") then
         expr = self:parseExpression();
         local closing: Token = self:advance();
@@ -73,9 +80,8 @@ function Parser:parsePrimary(): ASTNode
         end;
     elseif (token.type == "[") then
         local elements = {};
-
         if (self:peek().type ~= "]") then
-            while (true) do
+            while true do
                 table.insert(elements, self:parseExpression());
                 if (self:peek().type == ",") then
                     self:advance();
@@ -84,108 +90,76 @@ function Parser:parsePrimary(): ASTNode
                 end;
             end;
         end;
-
         local closing = self:advance();
         assert(closing.type == "]", "TuffSeal parser error: Expected ']' after array literal!");
-
-        expr = {
-            kind = "Array";
-            elements = elements;
-        };
+        expr = { kind = "Array"; elements = elements; };
     elseif (token.type == "{") then
         local entries = {};
-
-        while (self:peek().type ~= "}" and not self:isAtEnd()) do
+        while self:peek().type ~= "}" and not self:isAtEnd() do
             local key = self:advance();
             assert(key.type == "IDENTIFIER" or key.type == "STRING", "TuffSeal parser error: Invalid dictionary key!");
-
             local colon = self:advance();
             assert(colon.type == ":", "TuffSeal parser error: Expected ':' in dictionary!");
-
             local value = self:parseExpression();
-
-            table.insert(entries, {
-                key = key.literal or key.lexeme;
-                value = value;
-            });
-
-            if (self:peek().type == ",") then
+            table.insert(entries, { key = key.literal or key.lexeme; value = value; });
+            if self:peek().type == "," then
                 self:advance();
             else
                 break;
             end;
         end;
-
         local close = self:advance();
         assert(close.type == "}", "TuffSeal parser error: Expected '}' after dictionary!");
-
-        expr = {
-            kind = "Dictionary";
-            entries = entries;
-        };
+        expr = { kind = "Dictionary"; entries = entries; };
     elseif (token.type == "IDENTIFIER") then
-        if (self:peek().type == "(") then
+        expr = { kind = "Variable"; name = token.lexeme; };
+    else
+        error(`TuffSeal parser error: Unexpected token: {token.type}`, 2);
+    end;
+
+    while true do
+        if self:peek().type == "(" then
             self:advance();
             local args = {};
-
-            while (self:peek().type ~= ")" and not self:isAtEnd()) do
+            while self:peek().type ~= ")" and not self:isAtEnd() do
                 table.insert(args, self:parseExpression());
-                if (self:peek().type == ",") then
+                if self:peek().type == "," then
                     self:advance();
                 else
                     break;
                 end;
             end;
+            local closing = self:advance();
 
-            local closing: Token = self:advance();
-            if (closing.type ~= ")") then
+            if closing.type ~= ")" then
                 error(`TuffSeal parser error: Expected ')' after function args!`, 2);
             end;
 
-            expr = {
-                kind = "Call";
-                callee = token.lexeme;
-                arguments = args;
-            };
-        else
-            expr = {
-                kind = "Variable";
-                name = token.lexeme;
-            };
-        end;
-    else
-        error(`TuffSeal parser error: Unexpected token: {token.type}`, 2);
-    end;
+            local callSelf = false;
+            if self:peek().type == "!" then
+                self:advance();
+                callSelf = true;
+            end;
 
-    while (true) do
-        if (self:peek().type == "[") then
+            expr = { kind = "Call"; callee = expr; arguments = args; callSelf = callSelf; };
+        elseif self:peek().type == "[" then
             self:advance();
             local index = self:parseExpression();
             local close = self:advance();
             assert(close.type == "]", "TuffSeal parser error: Expected ']' after index!");
-
-            expr = {
-                kind = "Index";
-                object = expr;
-                index = index;
-            };
-        elseif (self:peek().type == ".") then
+            expr = { kind = "Index"; object = expr; index = index; };
+        elseif self:peek().type == "." then
             self:advance();
             local name = self:advance();
             assert(name.type == "IDENTIFIER", "TuffSeal parser error: Expected property name!");
-
-            expr = {
-                kind = "Property";
-                object = expr;
-                name = name.lexeme;
-            };
+            expr = { kind = "Property"; object = expr; name = name.lexeme; };
         else
             break;
         end;
     end;
 
     return expr;
-end;
+end
 
 function Parser:parseFactor(): ASTNode
     local expr: ASTNode = self:parseUnary();
@@ -336,6 +310,28 @@ function Parser:parseDeclaration(): ASTNode
     }
 end
 
+function Parser:parseAssignment(): ASTNode
+    local expr = self:parseOr();
+
+    if (self:peek().type == "=") then
+        local eq = self:advance();
+
+        if (expr.kind ~= "Variable" and expr.kind ~= "Property" and expr.kind ~= "Index") then
+            error(`TuffSeal parser error: Invalid assignment target!`, 2);
+        end
+
+        local value = self:parseAssignment();
+
+        return {
+            kind = "Assign",
+            name = expr.name,
+            value = value
+        }
+    end
+
+    return expr;
+end
+
 function Parser:parseFunctionDeclaration(kind: string): ASTNode
     --[[
     const fn A(b, c) {
@@ -407,41 +403,41 @@ function Parser:parseFunctionDeclaration(kind: string): ASTNode
 end
 
 function Parser:parseStatement(): ASTNode
-    while (self:peek().type == ";") do
+    while self:peek().type == ";" do
         self:advance();
     end
 
-    if (self:isAtEnd() or self:peek().type == "}") then
+    if self:isAtEnd() or self:peek().type == "}" then
         return nil;
     end
-    
-    local token: Token = self:peek();
-    local statement: ASTNode;
 
-    if (token.type == "LET" or token.type == "CONST") then
-        self:advance() 
+    local token = self:peek();
+    local statement;
+
+    if token.type == "LET" or token.type == "CONST" then
+        self:advance()
         if self:peek().type == "FN" then
-            return self:parseFunctionDeclaration(token.type:lower()) 
+            return self:parseFunctionDeclaration(token.type:lower());
         else
-            statement = self:parseDeclaration() -- // normal variable
+            statement = self:parseDeclaration();
         end
-    elseif (token.type == "FN") then
-        statement = self:parseFunctionDeclaration("let") -- // plain fn defaults to let
-    elseif (token.type == "IF") then
-        return self:parseIfStatement();
-    elseif (token.type == "WHILE") then
-        return self:parseWhileStatement();
-    elseif (token.type == "FOR") then
-        return self:parseForStatement();
+    elseif token.type == "FN" then
+        statement = self:parseFunctionDeclaration("let");
+    elseif token.type == "IF" then
+        statement = self:parseIfStatement();
+    elseif token.type == "WHILE" then
+        statement = self:parseWhileStatement();
+    elseif token.type == "FOR" then
+        statement = self:parseForStatement();
+    elseif token.type == "BREAK" then
+        self:advance();
+        statement = { kind = "Break" };
     else
-        statement = self:parseExpression()
+        statement = self:parseExpression();
     end
 
-    local nextToken: Token = self:peek()
-    if nextToken.type == ";" then
+    if self:peek().type == ";" then
         self:advance();
-    elseif nextToken.type == "}" or nextToken.type == "EOF" then
-        -- // semicolons are optional
     end
 
     return statement
@@ -591,89 +587,83 @@ function Parser:parseForStatement(): ASTNode
     local open_paren = self:advance();
     assert(open_paren.type == "(", "TuffSeal parser error: Expected '(' after for");
 
-    local first = self:advance();
-    assert(first.type == "IDENTIFIER", "TuffSeal parser error: Expected identifier in for loop!");
+    if self:peek().type == "IDENTIFIER" and self.tokens[self.current + 1].type == "=" then
+        local varToken = self:advance()
+        assert(varToken.type == "IDENTIFIER", "TuffSeal parser error: Expected identifier in numeric for");
 
-    -- // numeric for
-    if (self:peek().type == "=") then
-        self:advance();
+        assert(self:advance().type == "=", "TuffSeal parser error: Expected '=' after for variable");
 
         local startExpr = self:parseExpression();
 
-        local comma1 = self:advance();
-        assert(comma1.type == ",", "TuffSeal parser error: Expected ',' after for loop start!");
+        assert(self:advance().type == ",", "TuffSeal parser error: Expected ',' after start expression");
 
-        local endExpr = self:parseExpression();
+        local endExpr = self:parseExpression()
+
         local stepExpr = { kind = "Literal", value = 1 };
-
-        if (self:peek().type == ",") then
+        if self:peek().type == "," then
             self:advance();
             stepExpr = self:parseExpression();
         end
 
-        local close_paren = self:advance();
-        assert(close_paren.type == ")", "TuffSeal parser error: Expected ')' after for numeric loop!");
+        assert(self:advance().type == ")", "TuffSeal parser error: Expected ')' after numeric for");
 
-        local BraceOpen = self:advance();
-        assert(BraceOpen.type == "{", "TuffSeal parser error: Expected '{' after for!");
+        assert(self:advance().type == "{", "TuffSeal parser error: Expected '{' after for");
 
         local body = {};
-
-        while (self:peek().type ~= "}" and not self:isAtEnd()) do
-            local statement = self:parseExpression();
-            if (statement) then table.insert(body, statement) end;
+        while self:peek().type ~= "}" and not self:isAtEnd() do
+            local stmt = self:parseStatement()
+            if stmt then
+                table.insert(body, stmt);
+            end
         end
 
-        self:advance();
+        local brace_close = self:advance();
+        assert(brace_close.type == "}", "TuffSeal parser error: Expected '}' after for body");
 
         return {
             kind = "ForNumeric",
-            variable = first.lexeme,
+            variable = varToken.lexeme,
             start = startExpr,
             ["end"] = endExpr,
             step = stepExpr,
             body = body
         }
-    end
+    else
+        local keyVar = self:advance();
+        assert(keyVar.type == "IDENTIFIER", "TuffSeal parser error: Expected key identifier in for-in");
 
-    local keyVar = self:advance();
-    assert(keyVar.type == "IDENTIFIER", "TuffSeal parser error: Expected key identifier in for-in loop!");
+        assert(self:advance().type == ",", "TuffSeal parser error: Expected ',' after key");
 
-    local comma = self:advance();
-    assert(comma.type == ",", "TuffSeal parser error: Expected ',' in for-in loop");
+        local valueVar = self:advance();
+        assert(valueVar.type == "IDENTIFIER", "TuffSeal parser error: Expected value identifier in for-in");
 
-    local valueVar = self:advance();
-    assert(valueVar.type == "IDENTIFIER", "TuffSeal parser error: Expected value identifier in for-in loop!");
+        assert(self:advance().type == "IN", "TuffSeal parser error: Expected 'in' in for-in");
 
-    local inTok = self:advance();
-    assert(inTok.type == "IN", "TuffSeal parser error: Expected 'in' in for-in loop!");
+        local iterable = self:parseExpression();
 
-    local iterable = self:parseExpression();
+        assert(self:advance().type == ")", "TuffSeal parser error: Expected ')' after for-in");
 
-    local close_paren = self:advance();
-    assert(close_paren.type == ")", "TuffSeal parser error: Expected ')' after for-in!");
+        assert(self:advance().type == "{", "TuffSeal parser error: Expected '{' after for-in");
 
-    local brace_open = self:advance();
-    assert(brace_open.type == "{", "TuffSeal parser error: Expected '{' after for-in!");
-
-    local body = {};
-    while (self:peek().type ~= "}" and not self:isAtEnd()) do
-        local statement = self:parseStatement();
-        if (statement) then
-            table.insert(body, statement);
+        local body = {}
+        while self:peek().type ~= "}" and not self:isAtEnd() do
+            local stmt = self:parseStatement();
+            if stmt then
+                table.insert(body, stmt);
+            end
         end
+
+        local brace_close = self:advance()
+        assert(brace_close.type == "}", "TuffSeal parser error: Expected '}' after for-in body");
+
+        return {
+            kind = "ForIn",
+            key = keyVar.lexeme,
+            value = valueVar.lexeme,
+            iterable = iterable,
+            body = body
+        }
     end
-
-    local brace_close = self:advance();
-    assert(brace_close.type == "}", "TuffSeal parser error: Expected '}' after for-in body!");
-
-    return {
-        kind = "ForIn",
-        key = keyVar.lexeme,
-        value = valueVar.lexeme,
-        iterable = iterable,
-        body = body
-    };
 end
 
 function Parser:parseUnary(): ASTNode
@@ -693,7 +683,7 @@ function Parser:parseUnary(): ASTNode
 end;
 
 function Parser:parseExpression(): ASTNode
-    return self:parseOr();
+    return self:parseAssignment();
 end;
 
 return Parser;

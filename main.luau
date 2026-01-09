@@ -6,8 +6,9 @@ local Interpreter = require("./Src/interpreter");
 
 local fs = require("@lune/fs");
 local stdio = require("@lune/stdio");
+local process = require("@lune/process");
 
-local args = { ... };
+local args = process.args;
 
 local function printHelp()
     local help_text = [[
@@ -19,9 +20,9 @@ Options:
     --repl          Launch interactive REPL (not implemented yet)
 
 Examples:
-    lune main.lua script.tuff          -- runs the file
-    lune main.lua -r script.tuff       -- same as above
-    lune main.lua -h                   -- show help
+    tuffseal script.tuff          -- runs the file
+    tuffseal -r script.tuff       -- same as above
+    tuffseal -h                   -- show help
 ]]
     print(help_text);
 end
@@ -42,10 +43,37 @@ local function runFile(path: string)
     end
 end
 
+local function repl()
+    local interpreter = Interpreter.new();
+
+    while (true) do
+        local code = stdio.prompt("text", "> ");
+
+        xpcall(
+            function () 
+                local lexer = Lexer.new(code);
+                local tokens = lexer:scanTokens();
+                local parser = Parser.new(tokens);
+                
+                while not parser:isAtEnd() do
+                    local statement = parser:parseStatement();
+                    interpreter:evaluate(statement);
+                end
+            end,
+            function (e)
+                warn(`Failed to run! Error: {e}`);
+            end
+        );
+    end
+end
+
 if (#args == 0) then
     print("TuffSeal: No file provided.");
-    local path = stdio.prompt("text", "Enter file path: ");
-    if path == "" or not fs.isFile(path) then
+    local path = stdio.prompt("text", "Enter file path(type 'REPL' for REPL): ");
+    if (path == "REPL") then
+        repl();
+    end
+    if (path == "" or not fs.isFile(path)) then
         error("No valid file provided.");
     end
     runFile(path);
@@ -66,5 +94,6 @@ elseif (first == "-r" or first == "--run") then
 elseif (fs.isFile(first)) then
     runFile(first);
 else
-    error(`TuffSeal: Unknown argument or file not found: '{first}'`);
+    print("Starting TuffSeal repl..")
+    repl();
 end

@@ -14,4 +14,8 @@ function String:isAlphaNumeric(Str: string): boolean
     return (Str:match("[%w_]") ~= nil);
 end
 
+function String.startsWith(Str: string, Start: string): boolean
+    return (Str:sub(1, #Start) == Start);
+end
+
 return String;

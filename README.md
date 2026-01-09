@@ -1,194 +1,378 @@
-# 🦭 TuffSeal
+# TuffSeal
 
 **TuffSeal** is a small, interpreted, dynamically-typed programming language with a C-style syntax.
-It is implemented entirely in **Luau**, including a custom **lexer, parser, AST, and interpreter**.
+It is implemented entirely in **Luau**, featuring a custom **lexer, parser, AST, and interpreter**.
 
-TuffSeal is designed to be simple, explicit, and easy to extend, making it ideal for learning language internals or embedding into larger projects.
+TuffSeal is designed to be **simple**, **explicit**, and **easy to extend**, making it ideal for:
 
----
+* Learning how programming languages work internally
+* Experimenting with interpreters and ASTs
+* Embedding into larger Luau-based projects
 
-## ✨ Features
-
-* `let` and `const` variable declarations
-* Dynamic typing
-* Arrays (0-based indexing)
-* Dictionaries (object-style and bracket access)
-* Arithmetic, comparison, and logical operators
-* Control flow (`if`)
-* Function calls
-* Strict runtime and parser error reporting
+TuffSeal uses the **`.tfs`** file format for both scripts and modules.
 
 ---
 
-## 📦 Variables & Constants
+## Features
 
-```ts
-let x = 5;
-const y = 10;
+* Interpreted, AST-based execution
+* Dynamically typed
+* C-style syntax
+* `let` and `const` variables
+* First-class arrays and dictionaries
+* Expression-based functions (no `return` keyword)
+* Hook-safe `const fn` functions
+* Module system
+* Rich standard library (task, fs, net, process, serde, datetime, stdio)
+
+---
+
+## Comments
+
+```tfs
+// This is a comment
+```
+
+---
+
+## Variables
+
+```tfs
+let x = 5;       // mutable variable
+const y = 10;   // immutable variable
 ```
 
 * `let` variables can be reassigned
 * `const` variables cannot be reassigned
-* Constant arrays and dictionaries are immutable
+* Constant arrays and dictionaries are **immutable**
 
 ---
 
-## 📊 Data Types
+## Data Types
 
-### Numbers
+```tfs
+let n = 42;          // number
+let s = "hi!";      // string (semicolons are optional)
 
-```ts
-let n = 42;
-```
+let arr = [ 1, 2, 3, "four", "apple" ];
+print(arr[0]);      // 1 (arrays are 0-indexed)
 
-### Strings
-
-```ts
-let s = "Hello!";
-```
-
-### Arrays (0-based indexing)
-
-```ts
-let arr = [1, 2, 3, "hello"];
-print(arr[0]);
-```
-
-### Dictionaries
-
-```ts
 let dict = {
-    text: "Hello!",
-    count: 5
+	a: "Hello!",
+	b: 5
 };
 
-print(dict.text);
-print(dict["count"]);
+print(dict.a, dict.b);     // Hello! 5
+print(dict["a"]);          // Hello!
 ```
 
 ---
 
-## 🔁 Control Flow
+## Functions
 
-### `if` Statement
+TuffSeal does **not** use `return`.
+The **last expression** in a function is automatically returned.
 
-```ts
-if (x == 5) {
-    print("yes");
+```tfs
+let fn add(a, b)
+{
+	a + b;
+}
+
+const fn sub(a, b) {
+	a - b;
+	// const functions cannot be hooked or overwritten
+}
+
+fn mult(a, b) {
+	a * b; // defaults to let
 }
 ```
 
-Supported operators:
+---
+
+## Control Flow
+
+### Conditionals
+
+```tfs
+let x = 5;
+
+if (x == 5) {
+	print("x is 5!");
+} elseif (x == 10) {
+	print("x is 10!");
+} else {
+	print("x is not 5 and not 10!");
+}
+```
+
+### Numeric For Loop
+
+```tfs
+// step variable, end value, step size
+for (step = 1, 5, 1) {
+	print(step); // 1 2 3 4 5
+}
+```
+
+### Dictionary Iteration
+
+```tfs
+let ExampleDict = {
+	a: 5,
+	b: 10,
+	c: 15
+};
+
+for (key, value in ExampleDict) {
+	print(value); // 5 10 15
+}
+```
+
+### While Loop
+
+```tfs
+while (true) {
+	// loop forever
+}
+```
+
+---
+
+## Attribute Helpers
+
+```tfs
+if (hasattr(ExampleDict, "a")) {
+	let value_a = getattr(ExampleDict, "a");
+}
+```
+
+---
+
+## Arrays
+
+```tfs
+let arr = [ 1, 2, 3, 4, 5 ]; // index starts at 0
+
+pop(arr);            // [1, 2, 3, 4]
+remove(arr, 3);      // [1, 2, 3]
+
+print(find(arr, 1)); // 0
+print(len(arr));     // 3
+```
+
+---
+
+## Operators
 
 * Comparison: `== != < > <= >=`
 * Logical: `&& ||`
 * Arithmetic: `+ - * /`
 
----
-
-## 🧮 Expressions
-
-* Numbers and strings support arithmetic and concatenation
-* Arrays and dictionaries are first-class values
-* Expressions are evaluated via an AST-based interpreter
-
-Example:
-
-```ts
+```tfs
 let a = 5 + 2 * 3;
 let b = "Hello " + "World";
 ```
 
 ---
 
-## 🔒 Immutability Rules
+## Constants & Safety
 
 * `const` variables cannot be reassigned
 * Constant arrays cannot be modified
 * Constant dictionaries cannot be mutated
-* Any attempt to mutate a constant throws a runtime error
+* Any mutation attempt throws a **runtime error**
 
 ---
 
-## 🧠 Built-in Environment Functions
+## Methods & Self (`!` Call Syntax)
 
-TuffSeal exposes utility functions in the global environment, including:
+Functions can act as methods using the `!` call syntax, which automatically passes `self`.
 
-* Array insertion
-* Array removal
-* Value lookup
-* Table length utilities
-
-(Exact API may change as the language evolves.)
-
----
-
-## 🏗 Architecture
-
-TuffSeal is split into three clear stages:
-
-1. **Lexer**
-
-   * Converts source code into tokens
-
-2. **Parser**
-
-   * Builds an Abstract Syntax Tree (AST)
-
-3. **Interpreter**
-
-   * Walks the AST and evaluates nodes
-
-Each stage is isolated and easy to modify or extend.
-
----
-
-## 📜 Example Program
-
-```ts
-let a = 5;
-
-if (a == 5) {
-    print("It works!");
+```tfs
+fn func_inside_dict(self)
+{
+	setattr(self, "a", 5);
 }
 
-let arr = [1, 2, 3];
-let obj = { name: "TuffSeal" };
+let obj = {
+	a: 1,
+	func: func_inside_dict
+};
 
-print(arr[1]);
-print(obj.name);
+obj.func()!;
 ```
 
 ---
 
-## 🚧 Project Status
+## Modules & Imports
 
-TuffSeal is a **work in progress**.
+### Module (`MODULE.tfs`)
 
-Planned features:
+```tfs
+let loadargs = getloadargs();
 
-* `while` and `for` loops
-* User-defined functions
-* Better error diagnostics
-* Module / import system
+fn add(a, b)
+{
+	a + b;
+}
 
-Breaking changes may occur.
+let returnDict = {
+	add: add
+};
 
----
+returnDict;
+```
 
-## ⚙️ Running TuffSeal
+### Script (`SCRIPT.tfs`)
 
-Example integration:
+```tfs
+let module = loadmodule(
+	"MODULE.tfs",
+	"load", "args", "after", "filepath."
+)!;
 
-```lua
-local lexer = Lexer.new(source);
-local parser = Parser.new(lexer:scanTokens());
-local ast = parser:parse();
-Interpreter.new():interpret(ast);
+let result = module.add(1, 1);
+print(result); // 2
 ```
 
 ---
 
-## 📄 License
+## Standard Library
 
-MIT License.
+TuffSeal ships with a powerful standard library:
+
+```
+task, stdio, fs, process, net, serde, datetime
+```
+
+---
+
+## `task`
+
+```tfs
+let task = loadmodule("@std/task");
+
+task.wait(5);
+
+fn delayed() {
+	print("this task was delayed!");
+}
+task.delay(2, delayed);
+
+fn spawned() {
+	print("running asynchronously");
+}
+task.spawn(spawned);
+
+fn deferred() {
+	print("runs last");
+}
+task.defer(deferred);
+```
+
+---
+
+## `datetime`
+
+```tfs
+let DateTime = loadmodule("@std/datetime")!;
+
+let now = DateTime.now();
+
+print(now.toRfc3339()!);
+print(now.toRfc2822()!);
+print(now.formatLocalTime("%A, %d, %B, %Y", "fr")!);
+
+let future = DateTime.fromLocalTime({
+	year: 3033,
+	month: 8,
+	day: 26,
+	hour: 16,
+	minute: 56,
+	second: 28,
+	millisecond: 892
+})!;
+```
+
+---
+
+## `fs`
+
+Filesystem utilities:
+
+* `readFile`
+* `readDir`
+* `writeFile`
+* `writeDir`
+* `removeFile`
+* `removeDir`
+* `metadata`
+* `isFile`
+* `isDir`
+* `move`
+* `copy`
+
+Includes rich metadata, permissions, and write options.
+
+---
+
+## `net`
+
+Networking primitives:
+
+* HTTP requests (`net.request`)
+* HTTP servers (`net.serve`)
+* WebSockets
+* TCP & TLS streams
+* URL encoding/decoding
+
+Supports full request/response objects and server handlers.
+
+---
+
+## `process`
+
+Process control:
+
+* OS, architecture, endianness info
+* Environment variables
+* Spawn and exec child processes
+* Full stdio control
+* Exit codes and background processes
+
+---
+
+## `serde`
+
+Serialization & cryptography:
+
+* Encode/decode: `json`, `yaml`, `toml`
+* Compression: `gzip`, `zstd`, `lz4`, `brotli`
+* Hashing: `md5`, `sha*`, `sha3*`, `blake3`
+* HMAC support
+
+---
+
+## `stdio`
+
+Terminal I/O:
+
+* User prompts
+* Colored & styled output
+* Pretty formatting
+* Direct stdin/stdout/stderr access
+
+---
+
+## Philosophy
+
+TuffSeal prioritizes:
+
+* Explicit behavior
+* Predictable execution
+* Minimal magic
+* Hackability
+
+If you want a language that lets you **see and control everything**, TuffSeal is for you.

@@ -156,6 +156,20 @@ function Lexer:scanTokens(): { Token }
                     line = self.line
                 }
             );
+            continue;
+        end
+
+        if char == "." then
+            table.insert(
+                self.tokens,
+                {
+                    type = ".",
+                    lexeme = ".",
+                    literal = nil,
+                    line = self.line
+                }
+            );
+            continue;
         end
 
         if char == '&' and self:peek() == '&' then
@@ -177,10 +191,6 @@ function Lexer:scanTokens(): { Token }
         elseif char == '<' or char == '>' then
             table.insert(self.tokens, { type = char, lexeme = char, literal = nil, line = self.line });
             continue;
-        end
-
-        if char == ":" then
-
         end
 
         if char == "+" or char == "-" or char == "*" or char == "/" then
@@ -259,6 +269,20 @@ function Lexer:scanTokens(): { Token }
                 typeStr = "WHILE";
             elseif text == "elseif" then
                 typeStr = "ELSEIF";
+            elseif text == "for" then
+                typeStr = "FOR"
+            elseif text == "in" then
+                typeStr = "IN"
+            elseif text == "break" then
+                typeStr = "BREAK";
+            elseif text == "true" then
+                typeStr = "TRUE";
+            elseif text == "false" then
+                typeStr = "FALSE";
+            elseif text == "null" then
+                typeStr = "NULL";
+            elseif text == "IN" then
+                typeStr = "in"
             end
 
             table.insert(self.tokens, {
