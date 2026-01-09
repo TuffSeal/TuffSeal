@@ -1,4 +1,15 @@
+<div align="center">
+
 # TuffSeal
+
+**A small, explicit, embeddable scripting language**  
+with C-style syntax, implemented entirely in **Luau**
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Luau](https://img.shields.io/badge/built%20with-Luau-2C3E50.svg)](https://luau-lang.org/)
+[![Release](https://img.shields.io/github/v/release/U-235Consumer/TuffSeal)](https://github.com/U-235Consumer/TuffSeal/releases)
+
+</div>
 
 **TuffSeal** is a small, interpreted, dynamically-typed programming language with a C-style syntax.
 It is implemented entirely in **Luau**, featuring a custom **lexer, parser, AST, and interpreter**.

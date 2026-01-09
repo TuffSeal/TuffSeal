@@ -1,5 +1,7 @@
 -- // TuffSeal main.lua
 
+local VERSION = "v0.1.0";
+
 local Lexer = require("./Src/lexer");
 local Parser = require("./Src/parser");
 local Interpreter = require("./Src/interpreter");
@@ -12,17 +14,19 @@ local args = process.args;
 
 local function printHelp()
     local help_text = [[
-Usage: lune main.lua [options] [file]
+Usage: tuffseal [options] [file]
 
 Options:
     -h, --help      Show this help message
     -r, --run       Run a TuffSeal script (default behavior if file provided)
-    --repl          Launch interactive REPL (not implemented yet)
+    --repl          Launch interactive REPL 
+    --version       Output TuffSeal version
 
 Examples:
     tuffseal script.tuff          -- runs the file
     tuffseal -r script.tuff       -- same as above
     tuffseal -h                   -- show help
+    tuffseal -v                   -- output version
 ]]
     print(help_text);
 end
@@ -91,6 +95,8 @@ elseif (first == "-r" or first == "--run") then
         error("No file provided after -r / --run");
     end
     runFile(args[2]);
+elseif (first == "-h" or first == "--version") then
+    print(`TuffSeal version: {VERSION}`);
 elseif (fs.isFile(first)) then
     runFile(first);
 else

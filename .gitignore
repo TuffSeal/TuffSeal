@@ -1,3 +1,6 @@
 .luaurc
 test.tfs
 LEXER_TEST.luau
+tuffseal.exe
+EXECUTABLEBASE.luau
+BUILD
