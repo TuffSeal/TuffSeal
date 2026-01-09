@@ -23,8 +23,8 @@ Options:
     --version       Output TuffSeal version
 
 Examples:
-    tuffseal script.tuff          -- runs the file
-    tuffseal -r script.tuff       -- same as above
+    tuffseal script.tfs           -- runs the file
+    tuffseal -r script.tfd.       -- same as above
     tuffseal -h                   -- show help
     tuffseal -v                   -- output version
 ]]
