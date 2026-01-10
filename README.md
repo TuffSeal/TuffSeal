@@ -98,6 +98,19 @@ pms whoami
 
 Account management commands for PMS.
 
+### PMS Platform Support
+
+Precompiled PMS binaries are currently provided **only for Windows (x86_64)**.
+
+If you are on **Linux**, **macOS**, or a **non-x86_64 architecture**, you must compile `pms.py` yourself using the provided build scripts:
+
+* `build_pms.sh` (Linux / macOS)
+* `build_pms.bat` (Windows)
+
+These scripts will generate a native PMS executable for your platform using **PyInstaller**.
+
+> PMS is fully cross-platform, but binaries must be built locally on unsupported platforms.
+
 ---
 
 ## Comments
