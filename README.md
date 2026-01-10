@@ -2,15 +2,12 @@
 
 # TuffSeal
 
-**A small, explicit, embeddable scripting language**  
+**A small, explicit, embeddable scripting language**
 with C-style syntax, implemented entirely in **Luau**
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Luau](https://img.shields.io/badge/built%20with-Luau-2C3E50.svg)](https://luau-lang.org/)
-[![Release](https://img.shields.io/github/v/release/U-235Consumer/TuffSeal?include_prereleases)](
-https://github.com/U-235Consumer/TuffSeal/releases
-)
-
+[![Release](https://img.shields.io/github/v/release/U-235Consumer/TuffSeal?include_prereleases)](https://github.com/U-235Consumer/TuffSeal/releases)
 
 </div>
 
@@ -23,7 +20,7 @@ TuffSeal is designed to be **simple**, **explicit**, and **easy to extend**, mak
 * Experimenting with interpreters and ASTs
 * Embedding into larger Luau-based projects
 
-TuffSeal uses the **`.tfs`** file format for both scripts and modules.
+TuffSeal uses the **`.tfs`** file format for scripts and modules.
 
 ---
 
@@ -36,8 +33,70 @@ TuffSeal uses the **`.tfs`** file format for both scripts and modules.
 * First-class arrays and dictionaries
 * Expression-based functions (no `return` keyword)
 * Hook-safe `const fn` functions
-* Module system
+* Folder-based module system
+* Built-in package manager (**PMS / PackMySeal**)
 * Rich standard library (task, fs, net, process, serde, datetime, stdio)
+
+---
+
+## Package Manager (PMS – PackMySeal)
+
+TuffSeal ships with an official package manager called **PMS (PackMySeal)**.
+
+### Module Structure
+
+Modules are now **folders**.
+
+```
+module_name/
+└── module.tfs
+```
+
+`module.tfs` is automatically detected and loaded.
+Modules can still be `.tfs` files.
+
+---
+
+### PMS Commands
+
+```sh
+pms init [project-name]
+```
+
+Initialize a new TuffSeal project.
+
+```sh
+pms install [module-name] [project-name]
+```
+
+Install a module into a project (defaults to current directory).
+
+```sh
+pms remove [module-name] [project-name]
+```
+
+Remove a module from a project.
+
+```sh
+pms upload <module-name> <version> <zip-file>
+```
+
+Upload a module to PMS (requires an account).
+
+```sh
+pms list <module-name>
+```
+
+List all available versions for a module.
+
+```sh
+pms register <username> <password>
+pms login <username> <password>
+pms logout
+pms whoami
+```
+
+Account management commands for PMS.
 
 ---
 
@@ -52,8 +111,8 @@ TuffSeal uses the **`.tfs`** file format for both scripts and modules.
 ## Variables
 
 ```tfs
-let x = 5;       // mutable variable
-const y = 10;   // immutable variable
+let x = 5;
+const y = 10;
 ```
 
 * `let` variables can be reassigned
@@ -65,41 +124,63 @@ const y = 10;   // immutable variable
 ## Data Types
 
 ```tfs
-let n = 42;          // number
-let s = "hi!";      // string (semicolons are optional)
+let n = 42;
+let s = "hi!";
 
-let arr = [ 1, 2, 3, "four", "apple" ];
-print(arr[0]);      // 1 (arrays are 0-indexed)
+let arr = [ 1, 2, 3, "four" ];
+print(arr[0]); // 1
 
 let dict = {
 	a: "Hello!",
 	b: 5
 };
 
-print(dict.a, dict.b);     // Hello! 5
-print(dict["a"]);          // Hello!
+print(dict.a);
+print(dict["b"]);
 ```
+
+---
+
+## `type()` Builtin
+
+TuffSeal provides a built-in `type()` function to determine the runtime type of a value.
+
+```tfs
+let object = {
+	a: 5,
+	c: 10
+};
+
+print(type(object)); // "dictionary"
+```
+
+### Possible Return Values
+
+* `"fn"` – functions
+* `"int"` – numbers
+* `"str"` – strings
+* `"array"`
+* `"dictionary"`
+* `"luau_external"` – values originating outside TuffSeal
 
 ---
 
 ## Functions
 
 TuffSeal does **not** use `return`.
-The **last expression** in a function is automatically returned.
+The **last expression** is automatically returned.
 
 ```tfs
-let fn add(a, b)
-{
+fn add(a, b) {
 	a + b;
 }
 
 const fn sub(a, b) {
 	a - b;
-	// const functions cannot be hooked or overwritten
 }
 
 fn mult(a, b) {
-	a * b; // defaults to let
+	a * b;
 }
 ```
 
@@ -110,37 +191,28 @@ fn mult(a, b) {
 ### Conditionals
 
 ```tfs
-let x = 5;
-
 if (x == 5) {
 	print("x is 5!");
 } elseif (x == 10) {
 	print("x is 10!");
 } else {
-	print("x is not 5 and not 10!");
+	print("x is something else!");
 }
 ```
 
 ### Numeric For Loop
 
 ```tfs
-// step variable, end value, step size
-for (step = 1, 5, 1) {
-	print(step); // 1 2 3 4 5
+for (i = 1, 5, 1) {
+	print(i);
 }
 ```
 
 ### Dictionary Iteration
 
 ```tfs
-let ExampleDict = {
-	a: 5,
-	b: 10,
-	c: 15
-};
-
 for (key, value in ExampleDict) {
-	print(value); // 5 10 15
+	print(key, value);
 }
 ```
 
@@ -148,7 +220,6 @@ for (key, value in ExampleDict) {
 
 ```tfs
 while (true) {
-	// loop forever
 }
 ```
 
@@ -157,8 +228,8 @@ while (true) {
 ## Attribute Helpers
 
 ```tfs
-if (hasattr(ExampleDict, "a")) {
-	let value_a = getattr(ExampleDict, "a");
+if (hasattr(obj, "a")) {
+	let v = getattr(obj, "a");
 }
 ```
 
@@ -167,13 +238,13 @@ if (hasattr(ExampleDict, "a")) {
 ## Arrays
 
 ```tfs
-let arr = [ 1, 2, 3, 4, 5 ]; // index starts at 0
+let arr = [1, 2, 3, 4, 5];
 
-pop(arr);            // [1, 2, 3, 4]
-remove(arr, 3);      // [1, 2, 3]
+pop(arr);
+remove(arr, 3);
 
-print(find(arr, 1)); // 0
-print(len(arr));     // 3
+print(find(arr, 1));
+print(len(arr));
 ```
 
 ---
@@ -184,199 +255,41 @@ print(len(arr));     // 3
 * Logical: `&& ||`
 * Arithmetic: `+ - * /`
 
-```tfs
-let a = 5 + 2 * 3;
-let b = "Hello " + "World";
-```
-
----
-
-## Constants & Safety
-
-* `const` variables cannot be reassigned
-* Constant arrays cannot be modified
-* Constant dictionaries cannot be mutated
-* Any mutation attempt throws a **runtime error**
-
 ---
 
 ## Methods & Self (`!` Call Syntax)
 
-Functions can act as methods using the `!` call syntax, which automatically passes `self`.
-
 ```tfs
-fn func_inside_dict(self)
-{
+fn setA(self) {
 	setattr(self, "a", 5);
 }
 
 let obj = {
 	a: 1,
-	func: func_inside_dict
+	setA: setA
 };
 
-obj.func()!;
+obj.setA()!;
 ```
 
 ---
 
 ## Modules & Imports
 
-### Module (`MODULE.tfs`)
+Modules are loaded from folders containing `module.tfs` or by tuffseal script files directly.
 
 ```tfs
-let loadargs = getloadargs();
-
-fn add(a, b)
-{
-	a + b;
-}
-
-let returnDict = {
-	add: add
-};
-
-returnDict;
-```
-
-### Script (`SCRIPT.tfs`)
-
-```tfs
-let module = loadmodule(
-	"MODULE.tfs",
-	"load", "args", "after", "filepath."
-)!;
-
-let result = module.add(1, 1);
-print(result); // 2
+let mathmod = loadmodule("math_module")!;
+print(mathmod.add(1, 2));
 ```
 
 ---
 
 ## Standard Library
 
-TuffSeal ships with a powerful standard library:
-
 ```
 task, stdio, fs, process, net, serde, datetime
 ```
-
----
-
-## `task`
-
-```tfs
-let task = loadmodule("@std/task");
-
-task.wait(5);
-
-fn delayed() {
-	print("this task was delayed!");
-}
-task.delay(2, delayed);
-
-fn spawned() {
-	print("running asynchronously");
-}
-task.spawn(spawned);
-
-fn deferred() {
-	print("runs last");
-}
-task.defer(deferred);
-```
-
----
-
-## `datetime`
-
-```tfs
-let DateTime = loadmodule("@std/datetime")!;
-
-let now = DateTime.now();
-
-print(now.toRfc3339()!);
-print(now.toRfc2822()!);
-print(now.formatLocalTime("%A, %d, %B, %Y", "fr")!);
-
-let future = DateTime.fromLocalTime({
-	year: 3033,
-	month: 8,
-	day: 26,
-	hour: 16,
-	minute: 56,
-	second: 28,
-	millisecond: 892
-})!;
-```
-
----
-
-## `fs`
-
-Filesystem utilities:
-
-* `readFile`
-* `readDir`
-* `writeFile`
-* `writeDir`
-* `removeFile`
-* `removeDir`
-* `metadata`
-* `isFile`
-* `isDir`
-* `move`
-* `copy`
-
-Includes rich metadata, permissions, and write options.
-
----
-
-## `net`
-
-Networking primitives:
-
-* HTTP requests (`net.request`)
-* HTTP servers (`net.serve`)
-* WebSockets
-* TCP & TLS streams
-* URL encoding/decoding
-
-Supports full request/response objects and server handlers.
-
----
-
-## `process`
-
-Process control:
-
-* OS, architecture, endianness info
-* Environment variables
-* Spawn and exec child processes
-* Full stdio control
-* Exit codes and background processes
-
----
-
-## `serde`
-
-Serialization & cryptography:
-
-* Encode/decode: `json`, `yaml`, `toml`
-* Compression: `gzip`, `zstd`, `lz4`, `brotli`
-* Hashing: `md5`, `sha*`, `sha3*`, `blake3`
-* HMAC support
-
----
-
-## `stdio`
-
-Terminal I/O:
-
-* User prompts
-* Colored & styled output
-* Pretty formatting
-* Direct stdin/stdout/stderr access
 
 ---
 
