@@ -35,6 +35,12 @@ local TUFFSEAL_DEFAULT_ENVIRONMENT = {
     end
 };
 
+-- // all array checks somehow return false on both arrays and dicts
+-- // or all say that all arrays are dictionaries
+-- // this is the easiest way to do this im sorry
+local __ARRAYS = {};
+local __DICTS = {};
+
 -- // built-in functions and stuff are in the const environment to prevent hooking
 local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
     ['print'] = print,
@@ -86,95 +92,76 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         dict[key] = value;
     end,
     ['loadmodule'] = function (self: { [string]: any? }, modulePath: string, ...)
-        --[[
-        let module = loadmodule("path.tfs", "loadargs after the filepath!")!;
+        local Lexer = require("./lexer");
+        local Parser = require("./parser");
 
-        INSIDE MODULE: getloadargs() to get load args
+        local loadArgs = {...};
 
-        -----------------------------------------------------------------------
+        local function t_load_module(path: string, loadargs: { any })
+            local src = fs.readFile(path);
 
-        // module structure
+            local lexer = Lexer.new(src);
+            local tokens = lexer:scanTokens();
+            local parser = Parser.new(tokens);
 
-        fn add(a, b)
-        {
-            a + b;
-        }
+            local mInterpreter = setmetatable({}, interpreter);
+            mInterpreter.env = TUFFSEAL_DEFAULT_ENVIRONMENT;
+            mInterpreter.const_env = self;
 
-        fn subtract(a, b)
-        {
-            a - b;
-        }
+            function mInterpreter.getloadargs()
+                return loadargs;
+            end
 
-        fn print_load_args()
-        {
-            print(getloadargs());
-        }
+            local RETURN;
 
-        let module = { // this variable can be named whatever.
-            add: add,
-            sub: subtract
-        };
+            while (not parser:isAtEnd()) do
+                local statement = parser:parseStatement();
+                if (statement) then
+                    RETURN = mInterpreter:evaluate(statement);
+                end
+            end
 
-        module; // automatically returned
-
-        ----------------------------------------------------------------------
-        ALTERNATIVELY:
-
-        fn add(a, b)
-        {
-            a + b;
-        }
-
-        add; // return the function direclty
-
-        -- // use for this would be
-
-        local add_fn = loadmodule("path.tfs")
-        ]]
+            return RETURN;
+        end
 
         if (String.startsWith(modulePath, "@std")) then
             local remainingPath = string.sub(modulePath, 6, #modulePath);
             return require("./stdlib"):getmodule(remainingPath);
         end
 
-        local loadArgs = {...};
+        --[[
+        ModuleFolder >
+            TestModule >
+                module.tfs
+                // ...
+
+        main.tfs <- script that the module is being loaded from.
+        ]]
+        if (fs.isDir(modulePath)) then
+            assert(fs.isFile(`{modulePath}/module.tfs`), `loadmodule error: module '{modulePath}' is missing 'libmain.tfs'!`);
+            
+            return t_load_module(`{modulePath}/module.tfs`, loadArgs);
+        end
         
         assert(type(self) == 'table', `loadmodule error: expected 'self' to be dictionary, but recieved: {type(self)}. Did you run loadmodule with an exclamation mark? (CORRECT: loadmodule('path.tfs', 'args')!)`);
         assert(modulePath, `loadmodule error: expected arg 'modulePath', but recieved: null`);
         assert(type(modulePath) == 'string', `loadmodule error: expected 'string' for arg 'modulePath', recieved: {type(modulePath)}`);
         assert(fs.isFile(modulePath), `loadmodule error: failed to find module for: {modulePath}`);
         
-        local module_content = fs.readFile(modulePath);
-        
-        local Lexer = require("./lexer");
-        local Parser = require("./parser");
-
-        local tokens = Lexer.new(module_content):scanTokens();
-        local parser = Parser.new(tokens);
-
-        local vInterpreter = setmetatable({},interpreter);
-        vInterpreter.env = TUFFSEAL_DEFAULT_ENVIRONMENT;
-        vInterpreter.const_env = self;
-
-        function vInterpreter.env.getloadargs(): { any }
-            return loadArgs; -- // returns array w load args
-        end
-
-        -- // run
-
-        local RETURN;
-
-        while (not parser:isAtEnd()) do
-            local statement = parser:parseStatement();
-            if (statement) then
-                RETURN = vInterpreter:evaluate(statement);
-            end
-        end
-
-        return RETURN;
+        return t_load_module(modulePath, loadArgs);
     end,
     ['cloneobject'] = function (obj: any)
         return obj;
+    end,
+    ['type'] = function (obj: any): string
+        if (typeof(obj) == "function") then return "fn" end;
+        if (typeof(obj) == "number") then return "int" end;
+        if (typeof(obj) == "string") then return "string" end;
+        if (typeof(obj) == "table") then
+            if (table.find(__ARRAYS, obj)) then return "array" end;
+            if (table.find(__DICTS, obj)) then return "dictionary" end;
+        end
+        return "luau_external";
     end
 };
 
@@ -468,6 +455,8 @@ function interpreter:evaluate(node: ASTNode): any
                 array[i - 1] = self:evaluate(elem);
             end
 
+            table.insert(__ARRAYS, array);
+
             return array;
         end,
         Dictionary = function ()
@@ -482,6 +471,8 @@ function interpreter:evaluate(node: ASTNode): any
                     dict[entry.key] = self:evaluate(entry.value);
                 end
             end
+
+            table.insert(__DICTS, dict);
             
             return dict;
         end,

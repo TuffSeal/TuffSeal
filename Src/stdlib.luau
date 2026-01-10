@@ -1,5 +1,8 @@
 -- // @std for tuffseal
 
+local Lexer = require("./lexer");
+local Parser = require("./parser");
+
 local std = {};
 
 std.task = require("@lune/task");

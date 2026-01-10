@@ -5,6 +5,7 @@ local VERSION = "v0.1.0";
 local Lexer = require("./Src/lexer");
 local Parser = require("./Src/parser");
 local Interpreter = require("./Src/interpreter");
+local Builder = require("./Src/builder");
 
 local fs = require("@lune/fs");
 local stdio = require("@lune/stdio");
@@ -21,12 +22,13 @@ Options:
     -r, --run       Run a TuffSeal script (default behavior if file provided)
     --repl          Launch interactive REPL 
     --version       Output TuffSeal version
+    -b, --build     Build an executable from a .tfs file.
 
 Examples:
-    tuffseal script.tfs           -- runs the file
-    tuffseal -r script.tfs.       -- same as above
-    tuffseal -h                   -- show help
-    tuffseal -v                   -- output version
+    tuffseal script.tfs          -- runs the file
+    tuffseal -r script.tfs.      -- same as above
+    tuffseal -h                  -- show help
+    tuffseal -v                  -- output version
 ]]
     print(help_text);
 end
@@ -89,7 +91,7 @@ local first = args[1]
 if (first == "-h" or first == "--help") then
     printHelp();
 elseif (first == "--repl") then
-    error("REPL not implemented yet");
+    repl();
 elseif (first == "-r" or first == "--run") then
     if #args < 2 then
         error("No file provided after -r / --run");
