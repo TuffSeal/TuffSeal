@@ -24,7 +24,7 @@ Options:
 
 Examples:
     tuffseal script.tfs           -- runs the file
-    tuffseal -r script.tfd.       -- same as above
+    tuffseal -r script.tfs.       -- same as above
     tuffseal -h                   -- show help
     tuffseal -v                   -- output version
 ]]

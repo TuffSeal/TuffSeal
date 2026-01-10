@@ -4,3 +4,5 @@ LEXER_TEST.luau
 tuffseal.exe
 EXECUTABLEBASE.luau
 BUILD
+build.py
+tuffseal.luau
