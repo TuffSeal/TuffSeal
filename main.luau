@@ -21,7 +21,6 @@ Options:
     -r, --run       Run a TuffSeal script (default behavior if file provided)
     --repl          Launch interactive REPL 
     --version       Output TuffSeal version
-    -b, --build     Build an executable from a .tfs file.
 
 Examples:
     tuffseal script.tfs          -- runs the file
