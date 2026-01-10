@@ -5,7 +5,6 @@ local VERSION = "v0.2.0";
 local Lexer = require("./Src/lexer");
 local Parser = require("./Src/parser");
 local Interpreter = require("./Src/interpreter");
-local Builder = require("./Src/builder");
 
 local fs = require("@lune/fs");
 local stdio = require("@lune/stdio");
