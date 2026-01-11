@@ -25,6 +25,7 @@ local interpreter = {};
 interpreter.__index = interpreter;
 
 local fs = require("@lune/fs");
+local luau = require("@lune/luau");
 local String = require("./string");
 
 local BREAKSIGNAL = { kind = "Break" };
@@ -132,13 +133,15 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         --[[
         ModuleFolder >
             TestModule >
-                module.tfs
+                module.tfs or module.luau
                 // ...
+
+        module.luau is prioritized
 
         main.tfs <- script that the module is being loaded from.
         ]]
         if (fs.isDir(modulePath)) then
-            assert(fs.isFile(`{modulePath}/module.tfs`), `loadmodule error: module '{modulePath}' is missing 'libmain.tfs'!`);
+            assert(fs.isFile(`{modulePath}/module.tfs`) or fs.isFile(`{modulePath}/module.luau`), `loadmodule error: module '{modulePath}' is missing 'libmain.tfs'!`);
             
             return t_load_module(`{modulePath}/module.tfs`, loadArgs);
         end
