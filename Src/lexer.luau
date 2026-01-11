@@ -142,7 +142,7 @@ function Lexer:scanTokens(): { Token }
             while (true) do
                 local pk = self:advance();
 
-                if (pk == "\0") then
+                if (self:peek() == "\0") then
                     error(`TuffSeal lexer error: unfinished /* comment at: {self.line}`, 2);
                 end
 
