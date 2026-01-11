@@ -1,6 +1,6 @@
 -- // TuffSeal main.lua
 
-local VERSION = "v0.2.0";
+local VERSION = "v0.3.1";
 
 local Lexer = require("./Src/lexer");
 local Parser = require("./Src/parser");
