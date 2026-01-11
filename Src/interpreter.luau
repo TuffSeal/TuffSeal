@@ -66,12 +66,12 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         return array[index + 1];
     end,
     ['remove'] = function (array: { any }, index: number)
-        array[index] = nil;
+        array[index - 1] = nil;
     end,
     ['find'] = function (array: { any }, value: any)
         for i,v in ipairs(array) do
             if (v == value) then
-                return i;
+                return i - 1;
             end
         end
         return nil;
@@ -157,6 +157,7 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         if (typeof(obj) == "function") then return "fn" end;
         if (typeof(obj) == "number") then return "int" end;
         if (typeof(obj) == "string") then return "string" end;
+        if (typeof(obj) == "boolean") then return "bool" end;
         if (typeof(obj) == "table") then
             if (table.find(__ARRAYS, obj)) then return "array" end;
             if (table.find(__DICTS, obj)) then return "dictionary" end;
