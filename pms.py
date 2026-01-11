@@ -22,6 +22,7 @@ Commands:
     upload <name> <version> <zipfile>   Upload module to PMS repository
     list <module>                       Show available versions of a module
     remove <module> [dir]               Remove module from project
+    updatemodules [dir]                 Check for module updates
     register <username> <password>      Create new PMS account
     login <username> <password>         Log in and save credentials
     logout                              Log out (clear saved credentials)
@@ -139,6 +140,17 @@ main();
         print(f"Failed to initialize project: {e}")
         sys.exit(1)
 
+def get_latest_version(package_name: str) -> [str]:
+    url = f"{PMS_SERVER}/modules/{package_name}/versions"
+
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        versions = data.get("versions")
+        return versions[0]
+    except Exception as e:
+        return e
 
 def cmd_install() -> None:
     if len(sys.argv) < 3:
@@ -153,7 +165,7 @@ def cmd_install() -> None:
         module_name, version = module_str.split("@", 1)
     else:
         module_name = module_str
-        version = "latest"
+        version = get_latest_version(module_name)
 
     if not ask_confirm(f"Install '{module_name}@{version}'?"):
         sys.exit(0)
@@ -241,7 +253,6 @@ def cmd_list_versions() -> None:
             print(f"  • {v}")
     except Exception as e:
         print(f"Failed to fetch versions: {e}")
-
 
 def cmd_register() -> None:
     if len(sys.argv) != 4:
@@ -338,6 +349,19 @@ def cmd_upload() -> None:
     except Exception as e:
         print(f"Upload failed: {e}")
         sys.exit(1)
+
+def update_modules():
+    project_name = "."
+
+    if len(sys.argv) >= 3:
+        project_name = sys.argv[2]
+
+    print(f"Checking for updates in '{project_name}'...")
+
+    modules_path = os.path.join(project_name, "Modules")
+    os.makedirs(modules_path, exist_ok=True)
+    metadata = load_project_metadata(project_name)
+
 
 
 def main():
