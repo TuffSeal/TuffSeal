@@ -172,6 +172,7 @@ print(type(object)); // "dictionary"
 * `"fn"` – functions
 * `"int"` – numbers
 * `"str"` – strings
+* `"bool"` - booleans
 * `"array"`
 * `"dictionary"`
 * `"luau_external"` – values originating outside TuffSeal
