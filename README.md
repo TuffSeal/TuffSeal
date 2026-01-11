@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="https://files.catbox.moe/7jz9v1.png" alt="TuffSeal Logo" width="180"/>
+
 # TuffSeal
 
 **A small, explicit, embeddable scripting language**
