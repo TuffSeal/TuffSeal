@@ -6,3 +6,4 @@ EXECUTABLEBASE.luau
 BUILD
 build.py
 pms_server.py
+pms.spec
