@@ -23,6 +23,7 @@ Commands:
     list <module>                       Show available versions of a module
     remove <module> [dir]               Remove module from project
     updatemodules [dir]                 Check for module updates
+    deletefrompms <module>[@version]    Permanently deletes a module from PMS servers.
     register <username> <password>      Create new PMS account
     login <username> <password>         Log in and save credentials
     logout                              Log out (clear saved credentials)
@@ -31,6 +32,10 @@ Commands:
 NOTE: To use some PMS functions, you need a PMS account.
 Use 'pms register <username> <password>' to create a PMS account.
 If you already have an account, use 'pms login <username> <password>' to log in.
+
+WARNING: To remove modules from your project use 'remove', not 'deletefrompms'!
+'deletefrompms' will permanently remove the module from the PMS server,
+while 'remove' will only remove it from your project!
 """
 
 def get_auth_path() -> Path:
@@ -96,8 +101,10 @@ def is_access_token_alive() -> bool:
 
 def ask_confirm(message: str) -> bool:
     answer = input(f"{message} (y/N): ").strip().lower()
-    return answer in ('y', 'yes')
-
+    r = answer.lower() in ('y', 'yes')
+    if r != True:
+        print("Cancelled.")
+        sys.exit(1)
 
 def load_project_metadata(project_dir: str = ".") -> dict:
     path = Path(project_dir) / "pms_project.json"
@@ -384,8 +391,7 @@ def cmd_upload() -> None:
     try:
         filename = f"{module_name}@{version}.zip"
 
-        if not ask_confirm(f"Upload {filename}?"):
-            sys.exit(0)
+        ask_confirm(f"Upload {filename}?")
 
         with open(zip_path, "rb") as f:
             files = {"file": (filename, f)}
@@ -479,7 +485,50 @@ def cmd_update_modules():
         except Exception as e:
             print(f"Installation failed for module {to_update_m}: {e}")
             sys.exit(1)
-    
+
+
+def cmd_delete_from_pls():
+    if len(sys.argv) < 2:
+        print("Usage: pms deletefrompms <module>[@version]\nOR: pms deletefrompms <module>")
+
+    refresh_auth_token()
+
+    fullname = sys.argv[2]
+    vername = None
+    if "@" in fullname:
+        fullname, vername = fullname.split("@", 2)
+
+    if vername:
+        ask_confirm(f"Are you sure you want to delete version '{vername}' from the module '{fullname}'?")
+    else:
+        ask_confirm(f"Are you sure you want to delete the ENTIRE MODULE '{fullname}'?")
+        ask_confirm(f"Are you REALLY sure you want to delete the module '{fullname}'?")
+
+    print("Starting deletion!")
+
+    json = {}
+    if vername:
+        json = {"version": vername}
+
+    auth = load_auth()
+
+    try:
+        r = requests.post(
+            url=f"{PMS_SERVER}/modules/{fullname}/delete",
+            json=json,
+            headers={
+                "Authorization": f"Bearer {auth.get("token")}"
+            }
+        )
+        r.raise_for_status()
+
+        data = r.json()
+        print(data.get("msg"))
+    except Exception as e:
+        print(f"Error deleting: {e}")
+        sys.exit(1)
+
+    print("Finished deleting.")
 
 def main():
     if len(sys.argv) < 2:
@@ -498,6 +547,8 @@ def main():
         "logout":   lambda: (ask_confirm("Log out?") and clear_auth() and print("Logged out.")),
         "whoami":   cmd_whoami,
         "upload":   cmd_upload,
+        "updatemodules": cmd_update_modules,
+        "deletefrompms": cmd_delete_from_pls,
         "help":     lambda: print(HELP_MESSAGE)
     }
 
