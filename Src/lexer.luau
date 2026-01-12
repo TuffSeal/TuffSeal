@@ -308,8 +308,8 @@ function Lexer:scanTokens(): { Token }
                 typeStr = "FALSE";
             elseif text == "null" then
                 typeStr = "NULL";
-            elseif text == "IN" then
-                typeStr = "in"
+            elseif text == "ins" then
+                typeStr = "INS";
             end
 
             table.insert(self.tokens, {

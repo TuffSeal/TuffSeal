@@ -338,6 +338,37 @@ function interpreter:evaluate(node: ASTNode): any
             end
             return newFn;
         end,
+        Ins = function ()
+            --[[
+            ins (a, b) {};
+            ]]
+            local insFn = function (...)
+                local args = { ... };
+                local localEnv = {};
+                
+                for k, v in pairs(self.env) do localEnv[k] = v end;
+                for i, param in ipairs(node.parameters) do
+                    localEnv[param] = args[i];
+                end
+
+                local function_interpreter = setmetatable(
+                    {
+                        env = localEnv,
+                        const_env = self.const_env
+                    },
+                    getmetatable(self)
+                );
+
+                local f_run_result;
+
+                for _, statement in ipairs(node.body) do
+                    f_run_result = function_interpreter:evaluate(statement);
+                end
+                return f_run_result;
+            end
+
+            return insFn;
+        end,
         Logical = function ()
             local left = self:evaluate(node.left);
             
