@@ -25,6 +25,7 @@ local interpreter = {};
 interpreter.__index = interpreter;
 
 local fs = require("@lune/fs");
+local luau = require("@lune/luau");
 local String = require("./string");
 
 local BREAKSIGNAL = { kind = "Break" };
@@ -98,7 +99,22 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         local loadArgs = {...};
 
         local function t_load_module(path: string, loadargs: { any })
+            local p_a = path:sub(#path - 3, #path); -- // luau
+            local p_b = path:sub(#path - 2, #path); -- // lua
+
             local src = fs.readFile(path);
+
+            if (p_a == "luau" or p_b == "lua") then
+                local exec = luau.load(src);
+
+                getfenv(exec).getloadargs = function ()
+                    return loadArgs;
+                end
+
+                local success, result = pcall(exec);
+                assert(success, `loadmodule error: error while loading module: {result}`);
+                return result;
+            end
 
             local lexer = Lexer.new(src);
             local tokens = lexer:scanTokens();
@@ -138,9 +154,14 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         main.tfs <- script that the module is being loaded from.
         ]]
         if (fs.isDir(modulePath)) then
-            assert(fs.isFile(`{modulePath}/module.tfs`), `loadmodule error: module '{modulePath}' is missing 'libmain.tfs'!`);
+            local entry_point = `module.tfs`;
             
-            return t_load_module(`{modulePath}/module.tfs`, loadArgs);
+            if (fs.isFile(`{modulePath}/module.luau`)) then entry_point = `{modulePath}/module.luau` end;
+            if (fs.isFile(`{modulePath}/module.lua`)) then entry_point = `{modulePath}/module.lua` end;
+
+            assert(fs.isFile(entry_point), `loadmodule error: module is missing entry point 'module.tfs', 'module.luau' or 'module.lua'!`)
+
+            return t_load_module(entry_point, loadArgs);
         end
         
         assert(type(self) == 'table', `loadmodule error: expected 'self' to be dictionary, but recieved: {type(self)}. Did you run loadmodule with an exclamation mark? (CORRECT: loadmodule('path.tfs', 'args')!)`);
