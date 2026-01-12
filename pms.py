@@ -11,6 +11,8 @@ import tempfile
 import platform
 from typing import Dict
 
+VERSION = "0.2.0"
+
 PMS_SERVER = "https://packmyseal.pythonanywhere.com"
 
 HELP_MESSAGE = """\
@@ -22,12 +24,13 @@ Commands:
     upload <name> <version> <zipfile>   Upload module to PMS repository
     list <module>                       Show available versions of a module
     remove <module> [dir]               Remove module from project
-    updatemodules [dir]                 Check for module updates
+    updatemodules [dir]                 Check for module updates, if there are any, update.
     deletefrompms <module>[@version]    Permanently deletes a module from PMS servers.
     register <username> <password>      Create new PMS account
     login <username> <password>         Log in and save credentials
     logout                              Log out (clear saved credentials)
     whoami                              Show currently logged in user
+    version                             Displays the version of the PMS client you are using.
 
 NOTE: To use some PMS functions, you need a PMS account.
 Use 'pms register <username> <password>' to create a PMS account.
@@ -549,7 +552,8 @@ def main():
         "upload":   cmd_upload,
         "updatemodules": cmd_update_modules,
         "deletefrompms": cmd_delete_from_pls,
-        "help":     lambda: print(HELP_MESSAGE)
+        "help":     lambda: print(HELP_MESSAGE),
+        "version": lambda: print(f"Currently using: PMS {VERSION}")
     }
 
     if cmd not in commands:
