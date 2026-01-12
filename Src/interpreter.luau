@@ -163,7 +163,7 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
             if (table.find(__DICTS, obj)) then return "dictionary" end;
         end
         return "luau_external";
-    end
+    end,
 };
 
 function interpreter.new()
