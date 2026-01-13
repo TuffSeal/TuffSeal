@@ -113,8 +113,10 @@ function Parser:parsePrimary(): ASTNode
         expr = { kind = "Dictionary"; entries = entries; };
     elseif (token.type == "IDENTIFIER") then
         expr = { kind = "Variable"; name = token.lexeme; };
+    elseif (token.type == "INS") then
+        expr = self:parseInsStatement();
     else
-        error(`TuffSeal parser error: Unexpected token: {token.type}`, 2);
+        error(`TuffSeal parser error: Unexpected token: {token.type} at line {tostring(token.line)}`, 2);
     end;
 
     while true do
@@ -429,6 +431,9 @@ function Parser:parseStatement(): ASTNode
         statement = self:parseWhileStatement();
     elseif token.type == "FOR" then
         statement = self:parseForStatement();
+    elseif token.type == "INS" then
+        self:advance();
+        statement = self:parseInsStatement();
     elseif token.type == "BREAK" then
         self:advance();
         statement = { kind = "Break" };
@@ -664,6 +669,54 @@ function Parser:parseForStatement(): ASTNode
             body = body
         }
     end
+end
+
+function Parser:parseInsStatement(): ASTNode
+    --[[
+    ins (a, b) {
+        // ...
+    }
+    ]]
+
+    local open_paren: Token = self:advance();
+    assert(open_paren.type == "(", `TuffSeal parser errror: Expected '(' after 'ins'!`);
+
+    local params: { string } = {};
+
+    while (self:peek().type ~= ")") do
+        local param: Token = self:advance();
+
+        if (param.type ~= "IDENTIFIER") then
+            error(`TuffSeal parser error: Expected parameter name!`, 2);
+        end
+        table.insert(params, param.lexeme);
+
+        if (self:peek().type == ",") then
+            self:advance();
+        else
+            break;
+        end
+    end
+
+    local close_paren: Token = self:advance();
+    assert(close_paren.type == ")", `TuffSeal parser error: Expected ')' after 'ins' params!`);
+
+    local open_body: Token = self:advance();
+    assert(open_body.type == "{", `TuffSeal parser error: Expected 'ins' body after params!`);
+
+    local body: { ASTNode } = {};
+    while (self:peek().type ~= "}" and not self:isAtEnd()) do
+        table.insert(body, self:parseStatement(body));
+    end
+
+    local close_body: Token = self:advance();
+    assert(close_body.type == "}", `TuffSeal parser error: Expected '}' after 'ins' body!`);
+
+    return {
+        kind = "Ins",
+        parameters = params,
+        body = body
+    }
 end
 
 function Parser:parseUnary(): ASTNode

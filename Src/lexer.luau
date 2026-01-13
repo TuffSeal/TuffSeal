@@ -130,6 +130,33 @@ function Lexer:scanTokens(): { Token }
             continue;
         end
 
+        --[[
+        /*
+        comment
+        ok
+        */
+        ]]
+        if (char == "/" and self:peek() == "*") then
+            self:advance();
+
+            while (true) do
+                local pk = self:advance();
+
+                if (self:peek() == "\0") then
+                    error(`TuffSeal lexer error: unfinished /* comment at: {self.line}`, 2);
+                end
+
+                if (pk == "*") then
+                    if (self:peek() == "/") then
+                        self:advance();
+                        break;
+                    end
+                end
+            end
+
+            continue;
+        end
+
         local twoCharOps = { "==", "!=", "<=", ">=" };
         local two_char = char .. self:peek();
         if table.find(twoCharOps, two_char) then
@@ -281,8 +308,8 @@ function Lexer:scanTokens(): { Token }
                 typeStr = "FALSE";
             elseif text == "null" then
                 typeStr = "NULL";
-            elseif text == "IN" then
-                typeStr = "in"
+            elseif text == "ins" then
+                typeStr = "INS";
             end
 
             table.insert(self.tokens, {

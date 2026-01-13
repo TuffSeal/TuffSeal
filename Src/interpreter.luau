@@ -99,7 +99,22 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         local loadArgs = {...};
 
         local function t_load_module(path: string, loadargs: { any })
+            local p_a = path:sub(#path - 3, #path); -- // luau
+            local p_b = path:sub(#path - 2, #path); -- // lua
+
             local src = fs.readFile(path);
+
+            if (p_a == "luau" or p_b == "lua") then
+                local exec = luau.load(src);
+
+                getfenv(exec).getloadargs = function ()
+                    return loadArgs;
+                end
+
+                local success, result = pcall(exec);
+                assert(success, `loadmodule error: error while loading module: {result}`);
+                return result;
+            end
 
             local lexer = Lexer.new(src);
             local tokens = lexer:scanTokens();
@@ -143,7 +158,12 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         if (fs.isDir(modulePath)) then
             assert(fs.isFile(`{modulePath}/module.tfs`) or fs.isFile(`{modulePath}/module.luau`), `loadmodule error: module '{modulePath}' is missing 'libmain.tfs'!`);
             
-            return t_load_module(`{modulePath}/module.tfs`, loadArgs);
+            if (fs.isFile(`{modulePath}/module.luau`)) then entry_point = `{modulePath}/module.luau` end;
+            if (fs.isFile(`{modulePath}/module.lua`)) then entry_point = `{modulePath}/module.lua` end;
+
+            assert(fs.isFile(entry_point), `loadmodule error: module is missing entry point 'module.tfs', 'module.luau' or 'module.lua'!`)
+
+            return t_load_module(entry_point, loadArgs);
         end
         
         assert(type(self) == 'table', `loadmodule error: expected 'self' to be dictionary, but recieved: {type(self)}. Did you run loadmodule with an exclamation mark? (CORRECT: loadmodule('path.tfs', 'args')!)`);
@@ -166,7 +186,7 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
             if (table.find(__DICTS, obj)) then return "dictionary" end;
         end
         return "luau_external";
-    end
+    end,
 };
 
 function interpreter.new()
@@ -340,6 +360,37 @@ function interpreter:evaluate(node: ASTNode): any
                 self.env[node.name] = newFn;
             end
             return newFn;
+        end,
+        Ins = function ()
+            --[[
+            ins (a, b) {};
+            ]]
+            local insFn = function (...)
+                local args = { ... };
+                local localEnv = {};
+                
+                for k, v in pairs(self.env) do localEnv[k] = v end;
+                for i, param in ipairs(node.parameters) do
+                    localEnv[param] = args[i];
+                end
+
+                local function_interpreter = setmetatable(
+                    {
+                        env = localEnv,
+                        const_env = self.const_env
+                    },
+                    getmetatable(self)
+                );
+
+                local f_run_result;
+
+                for _, statement in ipairs(node.body) do
+                    f_run_result = function_interpreter:evaluate(statement);
+                end
+                return f_run_result;
+            end
+
+            return insFn;
         end,
         Logical = function ()
             local left = self:evaluate(node.left);
