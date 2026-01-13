@@ -11,6 +11,8 @@ import tempfile
 import platform
 from typing import Dict
 
+VERSION = "0.2.0"
+
 PMS_SERVER = "https://packmyseal.pythonanywhere.com"
 
 HELP_MESSAGE = """\
@@ -22,14 +24,21 @@ Commands:
     upload <name> <version> <zipfile>   Upload module to PMS repository
     list <module>                       Show available versions of a module
     remove <module> [dir]               Remove module from project
+    updatemodules [dir]                 Check for module updates, if there are any, update.
+    deletefrompms <module>[@version]    Permanently deletes a module from PMS servers.
     register <username> <password>      Create new PMS account
     login <username> <password>         Log in and save credentials
     logout                              Log out (clear saved credentials)
     whoami                              Show currently logged in user
+    version                             Displays the version of the PMS client you are using.
 
 NOTE: To use some PMS functions, you need a PMS account.
 Use 'pms register <username> <password>' to create a PMS account.
 If you already have an account, use 'pms login <username> <password>' to log in.
+
+WARNING: To remove modules from your project use 'remove', not 'deletefrompms'!
+'deletefrompms' will permanently remove the module from the PMS server,
+while 'remove' will only remove it from your project!
 """
 
 def get_auth_path() -> Path:
@@ -60,8 +69,8 @@ def load_auth() -> Dict[str, str]:
         sys.exit(1)
 
 
-def save_auth(username: str, token: str) -> None:
-    data = {"username": username, "token": token}
+def save_auth(username: str, token: str, refresh_token: str) -> None:
+    data = {"username": username, "token": token, "refresh_token": refresh_token}
     try:
         with open(get_auth_path(), "w", encoding="utf-8") as f:
             json.dump(data, f)
@@ -77,10 +86,28 @@ def clear_auth() -> None:
         pass
 
 
+def is_access_token_alive() -> bool:
+    url = f"{PMS_SERVER}/check"
+    auth = load_auth()
+    try:
+        r = requests.get(
+            url=url,
+            headers={
+                "Authorization": f"Bearer {auth['token']}"
+            }
+        )
+        r.raise_for_status()
+        data = r.json()
+        return data['alive']
+    except Exception as e:
+        return False
+
 def ask_confirm(message: str) -> bool:
     answer = input(f"{message} (y/N): ").strip().lower()
-    return answer in ('y', 'yes')
-
+    r = answer.lower() in ('y', 'yes')
+    if r != True:
+        print("Cancelled.")
+        sys.exit(1)
 
 def load_project_metadata(project_dir: str = ".") -> dict:
     path = Path(project_dir) / "pms_project.json"
@@ -139,6 +166,16 @@ main();
         print(f"Failed to initialize project: {e}")
         sys.exit(1)
 
+def get_latest_version(package_name: str) -> [str]:
+    url = f"{PMS_SERVER}/modules/{package_name}/versions/latest"
+
+    try:
+        r = requests.get(url, timeout=15)
+        r.raise_for_status()
+        return r.text
+    except Exception as e:
+        return e
+    
 
 def cmd_install() -> None:
     if len(sys.argv) < 3:
@@ -153,7 +190,7 @@ def cmd_install() -> None:
         module_name, version = module_str.split("@", 1)
     else:
         module_name = module_str
-        version = "latest"
+        version = get_latest_version(module_name)
 
     if not ask_confirm(f"Install '{module_name}@{version}'?"):
         sys.exit(0)
@@ -242,7 +279,6 @@ def cmd_list_versions() -> None:
     except Exception as e:
         print(f"Failed to fetch versions: {e}")
 
-
 def cmd_register() -> None:
     if len(sys.argv) != 4:
         print("Usage: pms register <username> <password>")
@@ -278,17 +314,19 @@ def cmd_login() -> None:
         )
         r.raise_for_status()
         token = r.json().get("token")
-        if not token:
+        refresh = r.json().get("refresh_token")
+        if not token or not refresh:
             print("Login successful but no token received.")
             sys.exit(1)
 
-        save_auth(username, token)
+        save_auth(username, token, refresh)
         print("Login successful. Credentials saved.")
     except Exception as e:
         print(f"Login failed: {e}")
 
 
 def cmd_whoami() -> None:
+    refresh_auth_token()
     try:
         auth = load_auth()
         r = requests.get(
@@ -302,6 +340,40 @@ def cmd_whoami() -> None:
         print(f"Failed to get current user: {e}")
 
 
+def refresh_auth_token():
+    if is_access_token_alive():
+        return
+    
+    print("Expired access token detected! Refreshing...")
+
+    auth = load_auth()
+    refresh = auth.get("refresh_token")
+
+    if not refresh:
+        print("Refresh token not found in auth file! Please, log into your account again.")
+        sys.exit(1)
+
+    try:
+        r = requests.get(
+            url=f"{PMS_SERVER}/refresh",
+            headers={
+                "Authorization": f"Bearer {refresh}"
+            }
+        )
+        r.raise_for_status()
+
+        data = r.json()
+        new_access_token = data.get("token")
+        if not new_access_token:
+            print("Token refresh succeeded but no token was returned!")
+            sys.exit(1)
+
+        save_auth(auth.get("username"), new_access_token, auth.get("refresh_token"))
+        print("Refresh successful! Resuming.")
+    except Exception as e:
+        print(f"Error while refreshing token: {e}")
+        sys.exit(1)
+
 def cmd_upload() -> None:
     if len(sys.argv) != 5:
         print("Usage: pms upload <module_name> <version> <zip_file>")
@@ -311,16 +383,18 @@ def cmd_upload() -> None:
     version = sys.argv[3]
     zip_path = sys.argv[4]
 
+    refresh_auth_token()
+
+    auth = load_auth()
+
     if not Path(zip_path).is_file():
         print(f"File not found: {zip_path}")
         sys.exit(1)
 
     try:
-        auth = load_auth()
         filename = f"{module_name}@{version}.zip"
 
-        if not ask_confirm(f"Upload {filename}?"):
-            sys.exit(0)
+        ask_confirm(f"Upload {filename}?")
 
         with open(zip_path, "rb") as f:
             files = {"file": (filename, f)}
@@ -340,6 +414,125 @@ def cmd_upload() -> None:
         sys.exit(1)
 
 
+def cmd_update_modules():
+    project_name = "."
+
+    if len(sys.argv) >= 3:
+        project_name = sys.argv[2]
+
+    print(f"Checking for updates in '{project_name}'...")
+
+    modules_path = os.path.join(project_name, "Modules")
+    os.makedirs(modules_path, exist_ok=True)
+    metadata = load_project_metadata(project_name)
+
+    if not "modules" in metadata:
+        metadata['modules'] = {}
+
+    m_modules = metadata['modules']
+
+    TO_UPDATE = []
+    for module in m_modules:
+        latest = ""
+        try:
+            latest = get_latest_version()
+        except Exception as e:
+            print(f"Error while getting latest version: {e}")
+            print("Proceeding to next module...")
+            continue
+
+        if module == latest:
+            print(f"Module {module} is on the latest version! Proceeding to next module..")
+            continue
+        
+        TO_UPDATE.append(module)
+
+    for to_update_m in TO_UPDATE:
+        latest_ver = get_latest_version(to_update_m)
+        url = f"{PMS_SERVER}/modules/{to_update_m}"
+        module_path = os.path.join(project_name, "Modules", to_update_m)
+
+        params = {}
+
+        try:
+            os.removedirs()
+        except Exception as e:
+            print(f"Failed to remove old module for: {e}, proceeding to the next module..")
+            continue
+
+        try:
+            with requests.get(url, params=params, stream=True, timeout=30) as r:
+                r.raise_for_status()
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+                    for chunk in r.iter_content(16384):
+                        tmp.write(chunk)
+                    tmp_path = tmp.name
+
+            target_dir = Path(project_name) / "Modules" / to_update_m
+            target_dir.mkdir(parents=True, exist_ok=True)
+
+            with zipfile.ZipFile(tmp_path) as zf:
+                zf.extractall(target_dir)
+
+            os.unlink(tmp_path)
+
+            metadata = load_project_metadata(project_name)
+            metadata.setdefault("modules", {})[to_update_m] = latest_ver
+            save_project_metadata(metadata, project_name)
+
+            print(f"Successfully installed {to_update_m}@{latest_ver}")
+
+        except requests.RequestException as e:
+            print(f"Download failed for module {to_update_m}: {e}")
+            sys.exit(1)
+        except Exception as e:
+            print(f"Installation failed for module {to_update_m}: {e}")
+            sys.exit(1)
+
+
+def cmd_delete_from_pls():
+    if len(sys.argv) < 2:
+        print("Usage: pms deletefrompms <module>[@version]\nOR: pms deletefrompms <module>")
+
+    refresh_auth_token()
+
+    fullname = sys.argv[2]
+    vername = None
+    if "@" in fullname:
+        fullname, vername = fullname.split("@", 2)
+
+    if vername:
+        ask_confirm(f"Are you sure you want to delete version '{vername}' from the module '{fullname}'?")
+    else:
+        ask_confirm(f"Are you sure you want to delete the ENTIRE MODULE '{fullname}'?")
+        ask_confirm(f"Are you REALLY sure you want to delete the module '{fullname}'?")
+
+    print("Starting deletion!")
+
+    json = {}
+    if vername:
+        json = {"version": vername}
+
+    auth = load_auth()
+
+    try:
+        r = requests.post(
+            url=f"{PMS_SERVER}/modules/{fullname}/delete",
+            json=json,
+            headers={
+                "Authorization": f"Bearer {auth.get("token")}"
+            }
+        )
+        r.raise_for_status()
+
+        data = r.json()
+        print(data.get("msg"))
+    except Exception as e:
+        print(f"Error deleting: {e}")
+        sys.exit(1)
+
+    print("Finished deleting.")
+
 def main():
     if len(sys.argv) < 2:
         print("Too few arguments. Use 'pms help' for usage.")
@@ -357,7 +550,10 @@ def main():
         "logout":   lambda: (ask_confirm("Log out?") and clear_auth() and print("Logged out.")),
         "whoami":   cmd_whoami,
         "upload":   cmd_upload,
-        "help":     lambda: print(HELP_MESSAGE)
+        "updatemodules": cmd_update_modules,
+        "deletefrompms": cmd_delete_from_pls,
+        "help":     lambda: print(HELP_MESSAGE),
+        "version": lambda: print(f"Currently using: PMS {VERSION}")
     }
 
     if cmd not in commands:

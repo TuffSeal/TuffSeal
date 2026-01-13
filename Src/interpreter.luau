@@ -148,13 +148,15 @@ local TUFFSEAL_DEFAULT_CONST_ENVIRONMENT = {
         --[[
         ModuleFolder >
             TestModule >
-                module.tfs
+                module.tfs or module.luau
                 // ...
+
+        module.luau is prioritized
 
         main.tfs <- script that the module is being loaded from.
         ]]
         if (fs.isDir(modulePath)) then
-            local entry_point = `module.tfs`;
+            assert(fs.isFile(`{modulePath}/module.tfs`) or fs.isFile(`{modulePath}/module.luau`), `loadmodule error: module '{modulePath}' is missing 'libmain.tfs'!`);
             
             if (fs.isFile(`{modulePath}/module.luau`)) then entry_point = `{modulePath}/module.luau` end;
             if (fs.isFile(`{modulePath}/module.lua`)) then entry_point = `{modulePath}/module.lua` end;
